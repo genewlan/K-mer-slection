@@ -1,0 +1,92 @@
+import os
+import argparse
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score
+
+
+def read_fasta_file(filename):
+    """
+    读取FASTA格式文件，返回基因序列列表
+    """
+    sequences = []
+    with open(filename, 'r') as f:
+        sequence = ''
+        for line in f:
+            if line.startswith('>'):
+                if sequence:
+                    sequences.append(sequence)
+                    sequence = ''
+            else:
+                sequence += line.strip()
+        sequences.append(sequence)
+    return sequences
+
+
+def generate_kmers(sequence, k):
+    """
+    生成k-mer列表
+    """
+    kmers = []
+    for i in range(len(sequence) - k + 1):
+        kmers.append(sequence[i:i+k])
+    return kmers
+
+
+def generate_kmer_features(sequences, k):
+    """
+    生成k-mer特征列表
+    """
+    features = []
+    for sequence in sequences:
+        kmers = generate_kmers(sequence, k)
+        feature = {}
+        for kmer in kmers:
+            if kmer in feature:
+                feature[kmer] += 1
+            else:
+                feature[kmer] = 1
+        features.append(feature)
+    return features
+
+
+def main():
+    parser = argparse.ArgumentParser(description='基于k-mer进行基因组分类')
+    parser.add_argument('data_dir', type=str, help='数据文件夹路径')
+    parser.add_argument('--k', type=int, default=3, help='k-mer的大小')
+    args = parser.parse_args()
+
+    # 读取数据
+    data_dir = args.data_dir
+    classes = os.listdir(data_dir)
+    sequences = []
+    labels = []
+    for i, class_name in enumerate(classes):
+        class_dir = os.path.join(data_dir, class_name)
+        filenames = os.listdir(class_dir)
+        for filename in filenames:
+            sequence_file = os.path.join(class_dir, filename)
+            sequence = read_fasta_file(sequence_file)[0]
+            sequences.append(sequence)
+            labels.append(i)
+
+    # 生成特征
+    k = args.k
+    features = generate_kmer_features(sequences, k)
+
+    # 划分训练集和测试集
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+
+    # 训练模型
+    clf = MultinomialNB()
+    clf.fit(X_train, y_train)
+
+    # 预测并评估模型
+    y_pred = clf.predict(X_test)
+    accuracy= accuracy_score(y_test, y_pred)
+    print(f'k = {k}, accuracy = {accuracy:.2f}')
+
+
+if __name__ == '__main__':
+    main()
